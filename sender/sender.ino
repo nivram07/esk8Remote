@@ -9,18 +9,55 @@
 #include "ssd1306_1bit.h"
 #include "bitmaps.h"
 #include "logo.h"
+#include <SPI.h>
+#include "RF24.h"
+#include <nRF24L01.h>
 
+#ifdef __cplusplus
+  extern "C" {
+#endif
+
+#include <esk8_model.h>
+#include <config.h> // should be created. 
+
+#ifdef __cplusplus
+  }
+#endif
+
+
+#define DEBUG
+
+#ifdef DEBUG
+ #define DEBUG_PRINT(x)     Serial.print (x)
+ #define DEBUG_PRINT_LN(x)  Serial.println (x)
+#else
+ #define DEBUG_PRINT(x)
+ #define DEBUG_PRINT_LN(x)
+#endif
+
+// placed in config.h
+extern byte addresses[][6];
+
+RF24 radio(7, 8); // CSN, CE
+                    // D9, D10  
+                    
 const int spriteWidth = sizeof(heartImage);
 
-const byte yAxisPin = 14; //A0
-const byte modePin = 2; //D2
+const byte Y_AXIS_PIN = 15; //A1
+const byte X_AXIS_PIN = 14; //A0
+
+// Click on the analog thumbstick
+const byte MODE_PIN = 2; //D2
 
 int rawAnalogValueYAxis = 0;
 int convertedValueYAxis = 0;
 
+int rawAnalogValueXAxis = 0;
+int convertedValueXAxis = 0;
+
 volatile byte currentMode = 0;
 volatile unsigned long previousTime = 0;
-const unsigned long debounceThreshold = 250;
+const unsigned long DEBOUNCE_THRESHOLD = 250;
 
 const byte DEFAULT_MODE = 0;
 const byte SPEED_MODE = 1;
@@ -31,20 +68,31 @@ void setup() {
     /* Select the font to use with menu and all font functions */
     ssd1306_setFixedFont(ssd1306xled_font6x8);
     ssd1306_128x32_i2c_init();
-
-    Serial.begin(9600); 
-    analogReference(EXTERNAL);
-    pinMode(yAxisPin, INPUT_PULLUP);
     
-    pinMode(modePin, INPUT_PULLUP);
+    Serial.begin(115200); 
+    analogReference(EXTERNAL);
+    pinMode(MODE_PIN, INPUT_PULLUP);
     delayMicroseconds(50);
-    attachInterrupt(digitalPinToInterrupt(modePin), changeMode, FALLING);
+    attachInterrupt(digitalPinToInterrupt(MODE_PIN), changeMode, FALLING);
+    
+    // setup radio
+    radio.begin();
+    radio.setPALevel(RF24_PA_LOW);
+    radio.openWritingPipe(addresses[0]);
+    //radio.openReadingPipe(1,addresses[1]);
+
+
+    // Start the radio listening for data
+    radio.stopListening();
+
+
     previousTime = millis();
     startUpScreen();
+    DEBUG_PRINT_LN("Setup done.");
 }
 
 void changeMode() {
-  if (millis() - previousTime > debounceThreshold) {
+  if (millis() - previousTime > DEBOUNCE_THRESHOLD) {
     if (currentMode >= SETTINGS_MODE) {
       currentMode = DEFAULT_MODE;
     } else {
@@ -55,7 +103,7 @@ void changeMode() {
 }
 
 static void startUpScreen() {
-   for (int i = 0; i < 3; i++) {
+  for (int i = 0; i < 3; i++) {
     
     ssd1306_clearScreen();
     ssd1306_drawBitmap(0, 0, 128, 32, logo);
@@ -63,30 +111,55 @@ static void startUpScreen() {
     delay(800);
     ssd1306_invertMode();
     delay(200);
-   }
-   ssd1306_normalMode();
+    
+    char message[] = "Hello";
+    Message msg = {MESSAGE, sizeof(message)};
+    convertToBytes(message, msg.payload, sizeof(message));
+    
+    if(!radio.write( &msg, sizeof(msg)) ) {
+      DEBUG_PRINT_LN("Failed.");
+    }
+  }
+  ssd1306_normalMode();
 }
 
 void loop() {
   
-  rawAnalogValueYAxis = analogRead(yAxisPin);
-  
-  // 1023/4 gives us range from 0-255
-  convertedValueYAxis = rawAnalogValueYAxis/4;
-  Serial.println(convertedValueYAxis/2);
-  drawScreen();
-  Serial.print("MODE: ");
-  Serial.println(currentMode);
+  calculateAnalogInputs();
+  ssd1306_clearScreen();
+  drawBars();
   drawCurrentMode();
+  sendData();
   delay(10);
 }
 
+void sendData() {
+  Message msg = {SPEED, sizeof(convertedValueYAxis)};
+  setSpeedValue(&msg, convertedValueYAxis);
 
-static void drawScreen() {
-  ssd1306_clearScreen();
-  uint8_t bar = convertedValueYAxis/2;
-  ssd1306_drawHLine(0, 8, bar);
-  drawHeart(bar);
+  if(!radio.write( &msg, sizeof(msg)) ) {
+    DEBUG_PRINT_LN("Failed.");
+  }
+}
+
+void calculateAnalogInputs() {
+  rawAnalogValueYAxis = analogRead(Y_AXIS_PIN); 
+  // 1023/4 gives us range from 0-255
+  convertedValueYAxis = rawAnalogValueYAxis/4;
+  
+  rawAnalogValueXAxis = analogRead(X_AXIS_PIN);
+  convertedValueXAxis = rawAnalogValueXAxis/4;
+}
+
+
+static void drawBars() {
+  uint8_t barY = convertedValueYAxis/2;
+  ssd1306_drawHLine(0, 8, barY);
+
+  uint8_t barX = convertedValueXAxis/2;
+  ssd1306_drawHLine(0, 10, barX);
+
+  drawHeart(barY);
 }
 
 static void drawCurrentMode() {
