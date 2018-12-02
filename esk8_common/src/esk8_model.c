@@ -11,3 +11,16 @@ void convertToCharArr(byte *source, char *destination, uint8_t length) {
     destination[i] = (char) source[i];
   }
 }
+
+
+void setSpeedValue(Message *msg, uint8_t value) {
+  msg->payload[0] = value;
+}
+
+
+/**
+ * Assume the first byte of the payload contains the speed value.
+ */
+uint8_t getSpeedValue(Message *msg) {
+  return msg->payload[0];
+}
