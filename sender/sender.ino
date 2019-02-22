@@ -12,6 +12,8 @@
 #include <SPI.h>
 #include "RF24.h"
 #include <nRF24L01.h>
+#include <VescUart.h>
+#include <datatypes.h>
 
 #ifdef __cplusplus
   extern "C" {
@@ -64,6 +66,10 @@ const byte SPEED_MODE = 1;
 const byte BATTERY_MODE = 2;
 const byte SETTINGS_MODE = 3;
 
+// message from receiver
+struct bldcMeasure receivedMsg;
+
+
 void setup() {
     /* Select the font to use with menu and all font functions */
     ssd1306_setFixedFont(ssd1306xled_font6x8);
@@ -78,13 +84,12 @@ void setup() {
     // setup radio
     radio.begin();
     radio.setPALevel(RF24_PA_LOW);
-    radio.openWritingPipe(addresses[0]);
-    //radio.openReadingPipe(1,addresses[1]);
+    radio.setDataRate(RF24_2MBPS);
+    radio.enableAckPayload();
+    radio.setRetries(5,15);
+    radio.openWritingPipe(addresses[RECEIVER_ADDRESS_INDEX]);
 
-
-    // Start the radio listening for data
-    radio.stopListening();
-
+     
 
     previousTime = millis();
     startUpScreen();
@@ -110,15 +115,6 @@ static void startUpScreen() {
     ssd1306_normalMode();
     delay(800);
     ssd1306_invertMode();
-    delay(200);
-    
-    char message[] = "Hello";
-    Message msg = {MESSAGE, sizeof(message)};
-    convertToBytes(message, msg.payload, sizeof(message));
-    
-    if(!radio.write( &msg, sizeof(msg)) ) {
-      DEBUG_PRINT_LN("Failed.");
-    }
   }
   ssd1306_normalMode();
 }
@@ -129,15 +125,22 @@ void loop() {
   ssd1306_clearScreen();
   drawBars();
   drawCurrentMode();
+  
   sendData();
-  delay(10);
+   delay(10);
 }
 
 void sendData() {
   Message msg = {SPEED, sizeof(convertedValueYAxis)};
   setSpeedValue(&msg, convertedValueYAxis);
-
-  if(!radio.write( &msg, sizeof(msg)) ) {
+  bool sendSuccess = radio.write( &msg, sizeof(msg));
+  if( sendSuccess ) {
+    if (radio.isAckPayloadAvailable()) {
+        Message msgReceived;
+        radio.read( &msgReceived, sizeof(msgReceived) );             // Get the payload
+        parseData(&msgReceived);
+    }
+  } else {
     DEBUG_PRINT_LN("Failed.");
   }
 }
@@ -195,4 +198,46 @@ static void drawHeart(uint8_t position) {
     sprite.eraseTrace();
     /* Draw sprite on new place */
     sprite.draw();
+}
+/**
+ * float avgMotorCurrent;
+ float avgInputCurrent;
+  float dutyCycleNow;
+  long rpm;
+  float inpVoltage;
+  float ampHours;
+  float ampHoursCharged;
+  //2 values int32_t not read (8 byte)
+  long tachometer;
+  long tachometerAbs;
+ */
+//static void parseData(bldcMeasure *data) {
+//    DEBUG_PRINT("Average motor current: "); DEBUG_PRINT_LN(data->avgMotorCurrent);
+//    DEBUG_PRINT("Input voltage: "); DEBUG_PRINT_LN(data->inpVoltage);
+//}
+
+
+void parseData(Message *msg) {
+  char message[64] = "";
+  uint8_t speed;
+  switch (msg->dataType) {
+
+    case MESSAGE: {
+      convertToCharArr(msg->payload, message, msg->payloadLength);
+      DEBUG_PRINT("message: ");
+      DEBUG_PRINT_LN(message);  
+      break;
+    }
+    case SPEED: {
+      speed = getSpeedValue(msg);
+      DEBUG_PRINT("speed: ");
+      DEBUG_PRINT_LN(speed);  
+      // TODO: send speed to the vesc
+      // TODO: implement MIA message
+      break;
+    }
+    default: {
+      break;
+    }
+  }
 }
