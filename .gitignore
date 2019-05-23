@@ -1,0 +1,7 @@
+lib/.vscode/**
+.vscode/**
+**/.vscode
+*workspace
+lib/esk8_common/src/config.c
+**/.travis.yml
+.travis.yml
