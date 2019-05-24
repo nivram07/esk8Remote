@@ -18,7 +18,6 @@ typedef enum DATA_TYPE {
     SK8_TEL_RPM,
     SK8_TEL_WATT_HRS_CHARGE,
     SK8_TEL_AVG_MOTOR_CURRENT
-
 } DATA_TYPE;
 
 typedef struct Message {

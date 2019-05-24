@@ -81,14 +81,14 @@ bool receiveMsg(Message *msg) {
 void loop() {
   Message msg;
   receiveMsg(&msg);
-  DEBUGSERIAL.println("Reading data");
+//  DEBUGSERIAL.println("Reading data");
    if (VescUartGetValue(measuredVal)) {
-      DEBUGSERIAL.print("Received data\n");
-      SerialPrint2(measuredVal);
+    //  DEBUGSERIAL.print("Received data\n");
+      // SerialPrint2(measuredVal);
     } else {
       DEBUGSERIAL.println("Failed to get data!");
     }
-      // delay(1000);
+      // delay(500);
 
 }
 
@@ -108,7 +108,7 @@ void parseData(Message *msg) {
       speed = getSpeedValue(msg);
       DEBUGSERIAL.print("speed: ");
       DEBUGSERIAL.println(speed);
-      remote.valXJoy = 0;
+      remote.valXJoy = speed;
       remote.valYJoy = speed;
       remote.valUpperButton = false;
       remote.valLowerButton = false;
@@ -119,6 +119,7 @@ void parseData(Message *msg) {
       break;
     }
     default: {
+      DEBUGSERIAL.println("Unable to parse message!");
       break;
     }
   }
