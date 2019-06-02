@@ -29,7 +29,6 @@ along with this program.If not, see <http://www.gnu.org/licenses/>.
 
 #include "datatypes.h"
 #include "local_datatypes.h"
-
 #include <HardwareSerial.h>
 
 #if defined(__MK20DX128__) || defined(__MK20DX256__) || defined(__MK64FX512__) || defined(__MK66FX1M0__)
@@ -45,6 +44,8 @@ along with this program.If not, see <http://www.gnu.org/licenses/>.
   #define DEBUG_SERIAL_CLASS UARTClass
 #elif defined(USE_USBCON)
   // Arduino Leonardo USB Serial Port
+  #define DEBUG_SERIAL_CLASS Serial_
+#elif defined(USBCON)
   #define DEBUG_SERIAL_CLASS Serial_
 #else
   #include <HardwareSerial.h>  // Arduino AVR
@@ -83,12 +84,18 @@ int ReceiveUartMessage(uint8_t* payloadReceived, HardwareSerial* _vescserialPort
 ///#define DEBUG necessary
 ///Define in a Config.h the DEBUGSERIAL you want to use
 
-void SerialPrint(const struct bldcMeasure& values, DEBUG_SERIAL_CLASS*  print_serialPort );
+void SerialPrint(const struct bldcMeasure& values, DEBUG_SERIAL_CLASS*  print_serialPort);
+
 
 ///Help Function to print uint8_t array over Serial for Debug
 ///Define in a Config.h the DEBUGSERIAL you want to use
 
 void SerialPrint(uint8_t* data, int len);
+
+/**
+ * Used for Focbox Unity debugging
+ */
+void SerialPrintFocBoxUnity(const struct bldcMeasure& values, DEBUG_SERIAL_CLASS*  print_serialPort);
 
 ///Sends a command to VESC and stores the returned data
 ///@param bldcMeasure struct with received data

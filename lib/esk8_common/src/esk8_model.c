@@ -17,6 +17,14 @@ void setSpeedValue(Message *msg, uint8_t value) {
   msg->payload[0] = value;
 }
 
+void convertToMessage(Message *target, RequiredReadings *source) {
+  target->dataType = SL8_TEL_REQUIRED_READINGS;
+  byte convertedPayload[sizeof(source)];
+
+
+  target->payloadLength = sizeof(convertedPayload);
+}
+
 
 /**
  * Assume the first byte of the payload contains the speed value.

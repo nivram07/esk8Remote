@@ -24,12 +24,16 @@
 #define SERIALIO Serial1
 #define DEBUGSERIAL Serial
 
+
 void parseData(Message *msg);
-void SerialPrint2(const struct bldcMeasure values);
 
 // placed in config.h
 extern byte addresses[][6];
 RF24 radio(5, 6); // CE, CSN
+
+#define LED1_PIN 7
+#define LED2_PIN 8
+#define LED3_PIN 9
 
 
 struct bldcMeasure measuredVal;
@@ -48,6 +52,10 @@ void setup() {
   DEBUGSERIAL.begin(115200);
   delay(1000);
 
+  pinMode(LED1_PIN, OUTPUT);
+  pinMode(LED2_PIN, OUTPUT);
+  pinMode(LED3_PIN, OUTPUT);
+
   // setup radio
   radio.begin();
   radio.setPALevel(RF24_PA_LOW);
@@ -59,6 +67,22 @@ void setup() {
   radio.setRetries(5,15);
   // the radio listening for data
   radio.startListening();
+  
+  // we love blinking
+  for (int i = 0; i < 3; i++) {
+    digitalWrite(LED1_PIN, LOW);
+    digitalWrite(LED2_PIN, LOW);
+    digitalWrite(LED3_PIN, LOW);
+    delay(1000);
+    digitalWrite(LED1_PIN, HIGH);
+    digitalWrite(LED2_PIN, HIGH);
+    digitalWrite(LED3_PIN, HIGH);
+    delay(2000);
+  }
+
+  digitalWrite(LED1_PIN, LOW);
+  digitalWrite(LED2_PIN, LOW);
+  digitalWrite(LED3_PIN, LOW);
   DEBUGSERIAL.println("Setup complete");
 }
 
@@ -69,9 +93,11 @@ bool receiveMsg(Message *msg) {
    ackMsg.dataType = SK8_MESSAGE;
 
    if( radio.available()){
-        radio.read( msg, sizeof(*msg) );             // Get the payload
+      digitalWrite(LED1_PIN, HIGH);
+      radio.read( msg, sizeof(*msg) );             // Get the payload
       parseData(msg);
       radio.writeAckPayload(1, &ackMsg, sizeof(ackMsg));
+      digitalWrite(LED1_PIN, LOW);
       return true;
    }
    return false;
@@ -83,18 +109,22 @@ void loop() {
   receiveMsg(&msg);
 //  DEBUGSERIAL.println("Reading data");
    if (VescUartGetValue(measuredVal)) {
+       digitalWrite(LED2_PIN, HIGH);
+
     //  DEBUGSERIAL.print("Received data\n");
-      // SerialPrint2(measuredVal);
+      SerialPrintFocBoxUnity(measuredVal, &DEBUGSERIAL);
     } else {
       DEBUGSERIAL.println("Failed to get data!");
     }
       // delay(500);
-
+    digitalWrite(LED1_PIN, LOW);
+    digitalWrite(LED2_PIN, LOW);
+    digitalWrite(LED3_PIN, LOW);
 }
 
 void parseData(Message *msg) {
   char message[64] = "";
-  DEBUGSERIAL.println("Message received from remote!");
+  //DEBUGSERIAL.println("Message received from remote!");
   uint8_t speed;
   switch (msg->dataType) {
 
@@ -123,35 +153,4 @@ void parseData(Message *msg) {
       break;
     }
   }
-}
-
-
-
-void SerialPrint2(const struct bldcMeasure values) {
-   Serial.print("tempFetFiltered: ");  Serial.println(values.tempFetFiltered);
-   Serial.print("tempFetFiltered: ");  Serial.println(values.tempFetFiltered2);
-   Serial.print("tempMotorFiltered:");  Serial.println(values.tempMotorFiltered);
-   Serial.print("tempMotorFiltered2:");  Serial.println(values.tempMotorFiltered2);
-   Serial.print("avgMotorCurrent: ");  Serial.println(values.avgMotorCurrent);
-   Serial.print("avgMotorCurrent2: ");  Serial.println(values.avgMotorCurrent2);
-   Serial.print("avgInputCurrent: ");  Serial.println(values.avgInputCurrent);
-   Serial.print("avgId:     ");  Serial.println(values.avgId);
-   Serial.print("avgId2:     ");  Serial.println(values.avgId2);
-   Serial.print("avgIq:     ");  Serial.println(values.avgIq);
-   Serial.print("avgIq2:     ");  Serial.println(values.avgIq2);
-   Serial.print("dutyNow:     ");  Serial.println(values.dutyNow);
-   Serial.print("dutyNow2:     ");  Serial.println(values.dutyNow2);
-   Serial.print("rpm:       ");  Serial.println(values.rpm);
-   Serial.print("rpm2:       ");  Serial.println(values.rpm2);
-   Serial.print("inpVoltage:    ");  Serial.println(values.inpVoltage);
-   Serial.print("ampHours:    ");  Serial.println(values.ampHours);
-   Serial.print("ampHoursCharged: ");  Serial.println(values.ampHoursCharged);
-   Serial.print("wattHours:   ");  Serial.println(values.wattHours);
-   Serial.print("wattHoursCharged:   ");  Serial.println(values.wattHoursCharged);
-   Serial.print("tachometer:    ");  Serial.println(values.tachometer);
-   Serial.print("tachometer2:    ");  Serial.println(values.tachometer2);
-   Serial.print("tachometerAbs: ");  Serial.println(values.tachometerAbs);
-   Serial.print("tachometerAbs2: ");  Serial.println(values.tachometerAbs2);
-
-   Serial.print("faultCode:   ");  Serial.println(values.faultCode);
 }

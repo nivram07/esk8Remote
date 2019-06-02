@@ -344,3 +344,32 @@ void SerialPrint(const struct bldcMeasure& values, DEBUG_SERIAL_CLASS*  print_se
 	print_serialPort->print("tachometerAbs:	"); print_serialPort->println(values.tachometerAbs);
 	print_serialPort->print("faultCode:		"); print_serialPort->println(values.faultCode);
 }
+
+
+void SerialPrintFocBoxUnity(const struct bldcMeasure& values, DEBUG_SERIAL_CLASS*  print_serialPort) {
+   print_serialPort->print("tempFetFiltered: ");  	print_serialPort->println(values.tempFetFiltered);
+   print_serialPort->print("tempFetFiltered: ");  	print_serialPort->println(values.tempFetFiltered2);
+   print_serialPort->print("tempMotorFiltered:");  	print_serialPort->println(values.tempMotorFiltered);
+   print_serialPort->print("tempMotorFiltered2:");  print_serialPort->println(values.tempMotorFiltered2);
+   print_serialPort->print("avgMotorCurrent: ");  	print_serialPort->println(values.avgMotorCurrent);
+   print_serialPort->print("avgMotorCurrent2: "); 	print_serialPort->println(values.avgMotorCurrent2);
+   print_serialPort->print("avgInputCurrent: ");  	print_serialPort->println(values.avgInputCurrent);
+   print_serialPort->print("avgId:     ");  		print_serialPort->println(values.avgId);
+   print_serialPort->print("avgId2:     ");  		print_serialPort->println(values.avgId2);
+   print_serialPort->print("avgIq:     ");  		print_serialPort->println(values.avgIq);
+   print_serialPort->print("avgIq2:     ");  		print_serialPort->println(values.avgIq2);
+   print_serialPort->print("dutyNow:     ");  		print_serialPort->println(values.dutyNow);
+   print_serialPort->print("dutyNow2:     ");  		print_serialPort->println(values.dutyNow2);
+   print_serialPort->print("rpm:       ");  		print_serialPort->println(values.rpm);
+   print_serialPort->print("rpm2:       ");  		print_serialPort->println(values.rpm2);
+   print_serialPort->print("inpVoltage:    ");  	print_serialPort->println(values.inpVoltage);
+   print_serialPort->print("ampHours:    ");  		print_serialPort->println(values.ampHours);
+   print_serialPort->print("ampHoursCharged: ");  	print_serialPort->println(values.ampHoursCharged);
+   print_serialPort->print("wattHours:   ");  		print_serialPort->println(values.wattHours);
+   print_serialPort->print("wattHoursCharged:   "); print_serialPort->println(values.wattHoursCharged);
+   print_serialPort->print("tachometer:    ");  	print_serialPort->println(values.tachometer);
+   print_serialPort->print("tachometer2:    ");  	print_serialPort->println(values.tachometer2);
+   print_serialPort->print("tachometerAbs: ");  	print_serialPort->println(values.tachometerAbs);
+   print_serialPort->print("tachometerAbs2: ");  	print_serialPort->println(values.tachometerAbs2);
+   print_serialPort->print("faultCode:   ");  		print_serialPort->println(values.faultCode);
+}
