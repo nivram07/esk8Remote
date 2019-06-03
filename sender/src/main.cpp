@@ -27,6 +27,7 @@
 #endif
 
 #define DEBUG
+#define DEBUGSERIAL Serial
 
 #ifdef DEBUG
  #define DEBUG_PRINT(x)     Serial.print (x)
@@ -136,7 +137,7 @@ void loop() {
   drawCurrentMode();
   
   sendData();
-   delay(10);
+   delay(5);
 }
 
 void sendData() {
@@ -208,22 +209,6 @@ static void drawHeart(uint8_t position) {
     /* Draw sprite on new place */
     sprite.draw();
 }
-/**
- * float avgMotorCurrent;
- float avgInputCurrent;
-  float dutyCycleNow;
-  long rpm;
-  float inpVoltage;
-  float ampHours;
-  float ampHoursCharged;
-  //2 values int32_t not read (8 byte)
-  long tachometer;
-  long tachometerAbs;
- */
-//static void parseData(bldcMeasure *data) {
-//    DEBUG_PRINT("Average motor current: "); DEBUG_PRINT_LN(data->avgMotorCurrent);
-//    DEBUG_PRINT("Input voltage: "); DEBUG_PRINT_LN(data->inpVoltage);
-//}
 
 
 void parseData(Message *msg) {
@@ -241,8 +226,26 @@ void parseData(Message *msg) {
       speed = getSpeedValue(msg);
       DEBUG_PRINT("speed: ");
       DEBUG_PRINT_LN(speed);  
-      // TODO: send speed to the vesc
       // TODO: implement MIA message
+      break;
+    }
+    case SK8_TEL_REQUIRED_READINGS: {
+      DEBUGSERIAL.println("Readings received.");
+      RequiredReadings readings;
+      int checkSize = convertToRequiredReadings(msg, &readings);
+      DEBUGSERIAL.print("payload size: "); DEBUG_PRINT_LN(msg->payloadLength);
+      DEBUG_PRINT("last index value: ");
+      DEBUG_PRINT_LN(checkSize);
+      DEBUG_PRINT("Amp Hours Charged: ");
+      DEBUG_PRINT_LN(readings.ampHoursCharged);
+      DEBUG_PRINT("RPM1: ");
+      DEBUG_PRINT_LN(readings.rpm1);
+      DEBUG_PRINT("RPM2: ");
+      DEBUG_PRINT_LN(readings.rpm2);
+      DEBUG_PRINT("Watt Hours Charged: ");
+      DEBUG_PRINT_LN(readings.wattHoursCharged);
+      DEBUG_PRINT("Avg Input Current: ");
+      DEBUG_PRINT_LN(readings.inputCurrent);
       break;
     }
     default: {

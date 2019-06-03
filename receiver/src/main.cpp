@@ -26,6 +26,7 @@
 
 
 void parseData(Message *msg);
+void constructAckMsg(Message *msg); 
 
 // placed in config.h
 extern byte addresses[][6];
@@ -41,8 +42,6 @@ struct bldcMeasure measuredVal;
 struct remotePackage remote;
 
 unsigned long count = 0;
-
-Message ackMsg;
 
 void setup() {
 
@@ -73,11 +72,11 @@ void setup() {
     digitalWrite(LED1_PIN, LOW);
     digitalWrite(LED2_PIN, LOW);
     digitalWrite(LED3_PIN, LOW);
-    delay(1000);
+    delay(500);
     digitalWrite(LED1_PIN, HIGH);
     digitalWrite(LED2_PIN, HIGH);
     digitalWrite(LED3_PIN, HIGH);
-    delay(2000);
+    delay(500);
   }
 
   digitalWrite(LED1_PIN, LOW);
@@ -87,7 +86,8 @@ void setup() {
 }
 
 bool receiveMsg(Message *msg) {
-   char hello [] = "hello";
+   char hello [] = "hello this test length!!";
+   Message ackMsg;
    convertToBytes(hello, ackMsg.payload, sizeof(hello));
    ackMsg.payloadLength = sizeof(ackMsg.payload);
    ackMsg.dataType = SK8_MESSAGE;
@@ -96,7 +96,18 @@ bool receiveMsg(Message *msg) {
       digitalWrite(LED1_PIN, HIGH);
       radio.read( msg, sizeof(*msg) );             // Get the payload
       parseData(msg);
-      radio.writeAckPayload(1, &ackMsg, sizeof(ackMsg));
+
+      if (VescUartGetValue(measuredVal)) {
+        digitalWrite(LED2_PIN, HIGH);
+        // SerialPrintFocBoxUnity(measuredVal, &DEBUGSERIAL);
+      } else {
+        DEBUGSERIAL.println("Failed to get data!");
+      }
+
+      Message msg;
+      constructAckMsg(&msg);
+      printBytes(msg.payload, msg.payloadLength, &DEBUGSERIAL);
+      radio.writeAckPayload(1, &msg, sizeof(ackMsg));
       digitalWrite(LED1_PIN, LOW);
       return true;
    }
@@ -107,19 +118,30 @@ bool receiveMsg(Message *msg) {
 void loop() {
   Message msg;
   receiveMsg(&msg);
-//  DEBUGSERIAL.println("Reading data");
-   if (VescUartGetValue(measuredVal)) {
-       digitalWrite(LED2_PIN, HIGH);
+  digitalWrite(LED1_PIN, LOW);
+  digitalWrite(LED2_PIN, LOW);
+  digitalWrite(LED3_PIN, LOW);
+}
 
-    //  DEBUGSERIAL.print("Received data\n");
-      SerialPrintFocBoxUnity(measuredVal, &DEBUGSERIAL);
-    } else {
-      DEBUGSERIAL.println("Failed to get data!");
-    }
-      // delay(500);
-    digitalWrite(LED1_PIN, LOW);
-    digitalWrite(LED2_PIN, LOW);
-    digitalWrite(LED3_PIN, LOW);
+void constructAckMsg(Message *msg) {
+  RequiredReadings readings;
+  readings.ampHoursCharged = measuredVal.ampHoursCharged;
+  readings.rpm1 = measuredVal.rpm;
+  readings.rpm2 = measuredVal.rpm2;
+  readings.wattHoursCharged = measuredVal.wattHoursCharged;
+  readings.inputCurrent = measuredVal.avgInputCurrent;
+  // DEBUGSERIAL.print("Amp Hours Charged: ");
+  // DEBUGSERIAL.print(readings.ampHoursCharged);
+  // DEBUGSERIAL.print(" RPM1: ");
+  // DEBUGSERIAL.print(readings.rpm1);
+  // DEBUGSERIAL.print(" RPM2: ");
+  // DEBUGSERIAL.print(readings.rpm2);
+  // DEBUGSERIAL.print(" Watt Hours Charged: ");
+  // DEBUGSERIAL.print(readings.wattHoursCharged);
+  // DEBUGSERIAL.print(" Avg Input Current: ");
+  // DEBUGSERIAL.print(readings.inputCurrent);
+
+  convertToMessage(msg, &readings);
 }
 
 void parseData(Message *msg) {
@@ -136,7 +158,7 @@ void parseData(Message *msg) {
     }
     case SK8_SPEED: {
       speed = getSpeedValue(msg);
-      DEBUGSERIAL.print("speed: ");
+      DEBUGSERIAL.print(" speed: ");
       DEBUGSERIAL.println(speed);
       remote.valXJoy = speed;
       remote.valYJoy = speed;
@@ -144,7 +166,6 @@ void parseData(Message *msg) {
       remote.valLowerButton = false;
       
       VescUartSetNunchukValues(remote);
-      // TODO: send speed to the vesc
       // TODO: implement MIA message
       break;
     }

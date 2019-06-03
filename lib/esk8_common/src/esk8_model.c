@@ -18,38 +18,60 @@ void setSpeedValue(Message *msg, uint8_t value) {
 }
 
 void convertToMessage(Message *target, RequiredReadings *source) {
-  target->dataType = SL8_TEL_REQUIRED_READINGS;
-  byte convertedPayload[sizeof(source)];
+  target->dataType = SK8_TEL_REQUIRED_READINGS;
+  int currentIndex = 0;
 
+  
+  FloatPayload item;
+  item.value = source->ampHoursCharged;
+  injectToPayload(&currentIndex, target->payload, &item);
+  
+  item.value = source->rpm1;
+  injectToPayload(&currentIndex, target->payload, &item);
 
-  target->payloadLength = sizeof(convertedPayload);
+  item.value = source->rpm2;
+  injectToPayload(&currentIndex, target->payload, &item);
+  
+  item.value = source->wattHoursCharged;
+  injectToPayload(&currentIndex, target->payload, &item);
+
+  item.value = source->inputCurrent;
+  injectToPayload(&currentIndex, target->payload, &item);
+
+  target->payloadLength = sizeof(target->payload)/sizeof(byte);
 }
 
+int convertToRequiredReadings(Message *source, RequiredReadings *target) {
+
+  int currentIndex = 0;
+  if (source->dataType == SK8_TEL_REQUIRED_READINGS) {
+
+    target->ampHoursCharged = getFloatValue(&currentIndex, source->payload);
+    target->rpm1 = getFloatValue(&currentIndex, source->payload);
+    target->rpm2 = getFloatValue(&currentIndex, source->payload);
+    target->wattHoursCharged = getFloatValue(&currentIndex, source->payload);
+    target->inputCurrent = getFloatValue(&currentIndex, source->payload);
+  }
+  return currentIndex;
+}
+
+float getFloatValue(int *sourceIndex, byte* source) {
+  FloatPayload floatPayload;
+  for (int i = 0; i < 4; i++) {
+    floatPayload.valueInBytes[i] = source[(*sourceIndex)++];
+  }
+  return floatPayload.value;
+}
+
+void injectToPayload(int *currentIndex, byte* payload, FloatPayload *item) {
+  for (int i = 0; i < 4; i++) {
+    payload[(*currentIndex)++] = item->valueInBytes[i];
+  }
+}
 
 /**
  * Assume the first byte of the payload contains the speed value.
  */
 uint8_t getSpeedValue(Message *msg) {
   return msg->payload[0];
-}
-
-
-// unsafe
-void setAmpHrCharged(Message *msg, float value) {
-  FloatPayload *payload;
-  payload->value = value;
-  for (int i = 0; i < sizeof(payload->value); i++) {
-      msg->payload[i] = payload->valueInBytes[i];
-  }
-
-  msg->payloadLength = sizeof(value);
-}
-
-// unsafe
-float getAmpHrCharged(Message *msg) {
-  FloatPayload *payload;
-  for (int i = 0; i < msg->payloadLength; i++) {
-    payload->valueInBytes[i] = msg->payload[i];
-  }
-  return payload->value;
 }

@@ -373,3 +373,9 @@ void SerialPrintFocBoxUnity(const struct bldcMeasure& values, DEBUG_SERIAL_CLASS
    print_serialPort->print("tachometerAbs2: ");  	print_serialPort->println(values.tachometerAbs2);
    print_serialPort->print("faultCode:   ");  		print_serialPort->println(values.faultCode);
 }
+
+void printBytes(byte *values, uint32_t size, DEBUG_SERIAL_CLASS*  print_serialPort) {
+	for (int i = 0; i < size; i++) {
+		print_serialPort->print(" "); print_serialPort->print(values[i]); print_serialPort->print(" ");
+	}
+}

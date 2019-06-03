@@ -97,6 +97,9 @@ void SerialPrint(uint8_t* data, int len);
  */
 void SerialPrintFocBoxUnity(const struct bldcMeasure& values, DEBUG_SERIAL_CLASS*  print_serialPort);
 
+void printBytes(byte *values, uint32_t size, DEBUG_SERIAL_CLASS*  print_serialPort);
+
+
 ///Sends a command to VESC and stores the returned data
 ///@param bldcMeasure struct with received data
 ///@param _vescserialPort, pointer of serial port to use
