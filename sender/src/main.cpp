@@ -51,6 +51,8 @@ const byte X_AXIS_PIN = 14; //A0
 // Click on the analog thumbstick
 const byte MODE_PIN = 2; //D2
 
+const byte DEAD_MAN_SWITCH_PIN = 9; //D9
+
 int rawAnalogValueYAxis = 0;
 int convertedValueYAxis = 0;
 
@@ -88,6 +90,8 @@ void setup() {
     Serial.begin(115200); 
     analogReference(EXTERNAL);
     pinMode(MODE_PIN, INPUT_PULLUP);
+    pinMode(DEAD_MAN_SWITCH_PIN, INPUT_PULLUP);
+
     delayMicroseconds(50);
     attachInterrupt(digitalPinToInterrupt(MODE_PIN), changeMode, FALLING);
     
@@ -141,27 +145,33 @@ void loop() {
 }
 
 void sendData() {
-  Message msg = {SK8_SPEED, sizeof(convertedValueYAxis)};
-  setSpeedValue(&msg, convertedValueYAxis);
-  bool sendSuccess = radio.write( &msg, sizeof(msg));
-  if( sendSuccess ) {
-    if (radio.isAckPayloadAvailable()) {
+  if (!digitalRead(DEAD_MAN_SWITCH_PIN)) {
+    Message msg = {SK8_SPEED, sizeof(convertedValueYAxis)};
+    setSpeedValue(&msg, convertedValueYAxis);
+    DEBUG_PRINT("Sending speed: ");
+    DEBUG_PRINT_LN(convertedValueYAxis);
+    bool sendSuccess = radio.write( &msg, sizeof(msg));
+    if( sendSuccess ) {
+      if (radio.isAckPayloadAvailable()) {
         Message msgReceived;
         radio.read( &msgReceived, sizeof(msgReceived) );             // Get the payload
         parseData(&msgReceived);
+      }
+    } else {
+      DEBUG_PRINT_LN("Failed.");
     }
-  } else {
-    DEBUG_PRINT_LN("Failed.");
   }
 }
 
 void calculateAnalogInputs() {
   rawAnalogValueYAxis = analogRead(Y_AXIS_PIN); 
   // 1023/4 gives us range from 0-255
-  convertedValueYAxis = rawAnalogValueYAxis/4;
+  convertedValueYAxis = map(rawAnalogValueYAxis, 0, 1023, 0, 255);
+  // convertedValueYAxis = rawAnalogValueYAxis/4;
   
   rawAnalogValueXAxis = analogRead(X_AXIS_PIN);
-  convertedValueXAxis = rawAnalogValueXAxis/4;
+  convertedValueXAxis = map(rawAnalogValueXAxis, 0, 1023, 0, 255);
+  //convertedValueXAxis = rawAnalogValueXAxis/4;
 }
 
 
