@@ -26,10 +26,10 @@
   }
 #endif
 
-#define DEBUG
+#define DEBUG 1
 #define DEBUGSERIAL Serial
 
-#ifdef DEBUG
+#if DEBUG
  #define DEBUG_PRINT(x)     Serial.print (x)
  #define DEBUG_PRINT_LN(x)  Serial.println (x)
 #else
@@ -40,24 +40,26 @@
 // placed in config.h
 extern byte addresses[][6];
 
-RF24 radio(7, 8); // CE, CSN
+RF24 radio(10, 9); // CE, CSN
                     // D7, D8  
                     
 const int spriteWidth = sizeof(heartImage);
 
-const byte Y_AXIS_PIN = 15; //A1
-const byte X_AXIS_PIN = 14; //A0
+const byte SPEED_PIN = 16; //A2
 
 // Click on the analog thumbstick
 const byte MODE_PIN = 2; //D2
 
 const byte DEAD_MAN_SWITCH_PIN = 9; //D9
 
-int rawAnalogValueYAxis = 0;
-int convertedValueYAxis = 0;
+int rawSpeedValue = 0;
+int convertedSpeedValue = 0;
 
-int rawAnalogValueXAxis = 0;
-int convertedValueXAxis = 0;
+const unsigned short SET_UPPER_LIMIT_SPEED = 1;
+const unsigned short SET_LOWER_LIMIT_SPEED = 0;
+
+int upperLimitSpeed = 1023;
+int lowerLimitSpeed = 0;
 
 volatile byte currentMode = 0;
 volatile unsigned long previousTime = 0;
@@ -81,6 +83,8 @@ void sendData();
 static void startUpScreen();
 
 void changeMode();
+void setLimitSpeed(unsigned short mode);
+
 
 void setup() {
     /* Select the font to use with menu and all font functions */
@@ -88,7 +92,7 @@ void setup() {
     ssd1306_128x32_i2c_init();
     
     Serial.begin(115200); 
-    analogReference(EXTERNAL);
+    analogReference(DEFAULT);
     pinMode(MODE_PIN, INPUT_PULLUP);
     pinMode(DEAD_MAN_SWITCH_PIN, INPUT_PULLUP);
 
@@ -98,16 +102,52 @@ void setup() {
     // setup radio
     radio.begin();
     radio.setPALevel(RF24_PA_LOW);
-    radio.setDataRate(RF24_2MBPS);
+    radio.setDataRate(RF24_250KBPS);
     radio.enableAckPayload();
     radio.setRetries(5,15);
     radio.openWritingPipe(addresses[RECEIVER_ADDRESS_INDEX]);
 
-     
+    ssd1306_clearScreen(); 
+    ssd1306_printFixed(0, 16, "HOLD ACCELERATE", STYLE_BOLD);
+    delay(5000);
+    setLimitSpeed(SET_UPPER_LIMIT_SPEED);
+    
+    ssd1306_clearScreen(); 
+    ssd1306_printFixed(0, 16, "HOLD BRAKE", STYLE_BOLD);
+    delay(5000);
+    setLimitSpeed(SET_LOWER_LIMIT_SPEED);
+
+    ssd1306_clearScreen();   
+    ssd1306_printFixed(0, 16, "DONE CALIBRATING", STYLE_BOLD);
+    delay(1500);
+    DEBUG_PRINT("MIN: ");
+    DEBUG_PRINT(lowerLimitSpeed);
+    DEBUG_PRINT( "MAX: ");
+    DEBUG_PRINT(upperLimitSpeed);
+    DEBUG_PRINT_LN("");
+    delay(1500);
 
     previousTime = millis();
     startUpScreen();
     DEBUG_PRINT_LN("Setup done.");
+}
+
+void setLimitSpeed(unsigned short mode) {
+  int current = 0;
+  for (int i = 0; i < 20; i++) {
+    current += analogRead(SPEED_PIN);
+    delay(5);
+  }
+  
+  if (mode == SET_UPPER_LIMIT_SPEED) {
+    upperLimitSpeed = current/20; // just average it
+    DEBUG_PRINT("ACTUAL MAX: ");
+    DEBUG_PRINT_LN(upperLimitSpeed);
+    if (upperLimitSpeed < 700) upperLimitSpeed = 1023; // adjust if too low
+  } else {
+    lowerLimitSpeed = current/20;
+    if (lowerLimitSpeed > 200) lowerLimitSpeed = 0; // adjust if too high
+  }
 }
 
 void changeMode() {
@@ -145,11 +185,11 @@ void loop() {
 }
 
 void sendData() {
-  if (!digitalRead(DEAD_MAN_SWITCH_PIN)) {
-    Message msg = {SK8_SPEED, sizeof(convertedValueYAxis)};
-    setSpeedValue(&msg, convertedValueYAxis);
-    DEBUG_PRINT("Sending speed: ");
-    DEBUG_PRINT_LN(convertedValueYAxis);
+  //if (!digitalRead(DEAD_MAN_SWITCH_PIN)) {
+    Message msg = {SK8_SPEED, sizeof(convertedSpeedValue)};
+    setSpeedValue(&msg, convertedSpeedValue);
+    // DEBUG_PRINT("Sending: ");
+    // DEBUG_PRINT_LN(convertedSpeedValue);
     bool sendSuccess = radio.write( &msg, sizeof(msg));
     if( sendSuccess ) {
       if (radio.isAckPayloadAvailable()) {
@@ -160,29 +200,20 @@ void sendData() {
     } else {
       DEBUG_PRINT_LN("Failed.");
     }
-  }
 }
 
 void calculateAnalogInputs() {
-  rawAnalogValueYAxis = analogRead(Y_AXIS_PIN); 
-  // 1023/4 gives us range from 0-255
-  convertedValueYAxis = map(rawAnalogValueYAxis, 0, 1023, 0, 255);
-  // convertedValueYAxis = rawAnalogValueYAxis/4;
-  
-  rawAnalogValueXAxis = analogRead(X_AXIS_PIN);
-  convertedValueXAxis = map(rawAnalogValueXAxis, 0, 1023, 0, 255);
-  //convertedValueXAxis = rawAnalogValueXAxis/4;
+
+  rawSpeedValue = analogRead(SPEED_PIN);
+  convertedSpeedValue = map(rawSpeedValue, lowerLimitSpeed, upperLimitSpeed, 0, 255);  
 }
 
 
 static void drawBars() {
-  uint8_t barY = convertedValueYAxis/2;
-  ssd1306_drawHLine(0, 8, barY);
+  uint8_t barSpeed = convertedSpeedValue/2;
+  ssd1306_drawHLine(0, 8, barSpeed);
 
-  uint8_t barX = convertedValueXAxis/2;
-  ssd1306_drawHLine(0, 10, barX);
-
-  drawHeart(barY);
+  drawHeart(barSpeed);
 }
 
 static void drawCurrentMode() {
@@ -240,22 +271,22 @@ void parseData(Message *msg) {
       break;
     }
     case SK8_TEL_REQUIRED_READINGS: {
-      DEBUGSERIAL.println("Readings received.");
+      //DEBUGSERIAL.println("Readings received.");
       RequiredReadings readings;
       int checkSize = convertToRequiredReadings(msg, &readings);
-      DEBUGSERIAL.print("payload size: "); DEBUG_PRINT_LN(msg->payloadLength);
-      DEBUG_PRINT("last index value: ");
-      DEBUG_PRINT_LN(checkSize);
-      DEBUG_PRINT("Amp Hours Charged: ");
-      DEBUG_PRINT_LN(readings.ampHoursCharged);
+      //DEBUGSERIAL.print("payload size: "); DEBUG_PRINT_LN(msg->payloadLength);
+      //DEBUG_PRINT("last index value: ");
+      //DEBUG_PRINT_LN(checkSize);
+      //DEBUG_PRINT("Amp Hours Charged: ");
+      //DEBUG_PRINT_LN(readings.ampHoursCharged);
       DEBUG_PRINT("RPM1: ");
-      DEBUG_PRINT_LN(readings.rpm1);
-      DEBUG_PRINT("RPM2: ");
+      DEBUG_PRINT(readings.rpm1);
+      DEBUG_PRINT(" RPM2: ");
       DEBUG_PRINT_LN(readings.rpm2);
-      DEBUG_PRINT("Watt Hours Charged: ");
-      DEBUG_PRINT_LN(readings.wattHoursCharged);
-      DEBUG_PRINT("Avg Input Current: ");
-      DEBUG_PRINT_LN(readings.inputCurrent);
+      //DEBUG_PRINT("Watt Hours Charged: ");
+      //DEBUG_PRINT_LN(readings.wattHoursCharged);
+      //DEBUG_PRINT("Avg Input Current: ");
+      //DEBUG_PRINT_LN(readings.inputCurrent);
       break;
     }
     default: {

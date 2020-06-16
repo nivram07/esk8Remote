@@ -21,8 +21,16 @@
   }
 #endif
 
-#define SERIALIO Serial1
+#define DEBUG 0
 #define DEBUGSERIAL Serial
+
+#if DEBUG
+ #define DEBUG_PRINT(x)     Serial.print (x)
+ #define DEBUG_PRINT_LN(x)  Serial.println (x)
+#else
+ #define DEBUG_PRINT(x)
+ #define DEBUG_PRINT_LN(x)
+#endif
 
 
 void parseData(Message *msg);
@@ -30,12 +38,9 @@ void constructAckMsg(Message *msg);
 
 // placed in config.h
 extern byte addresses[][6];
-RF24 radio(5, 6); // CE, CSN
+RF24 radio(10, 9); // CE, CSN
 
-#define LED1_PIN 7
-#define LED2_PIN 8
-#define LED3_PIN 9
-
+uint8_t speed = 128;
 
 struct bldcMeasure measuredVal;
 
@@ -43,22 +48,23 @@ struct remotePackage remote;
 
 unsigned long count = 0;
 
+char hello [] = "NO DATA";
+Message noData;
+
 void setup() {
-
   Serial.begin(115200);
-  SERIALIO.begin(115200);
   SetSerialPort(&SERIALIO);
-  DEBUGSERIAL.begin(115200);
-  delay(1000);
 
-  pinMode(LED1_PIN, OUTPUT);
-  pinMode(LED2_PIN, OUTPUT);
-  pinMode(LED3_PIN, OUTPUT);
+  convertToBytes(hello, noData.payload, sizeof(hello));
+  noData.payloadLength = sizeof(noData.payload);
+  noData.dataType = SK8_MESSAGE;
+
+  delay(1000);
 
   // setup radio
   radio.begin();
   radio.setPALevel(RF24_PA_LOW);
-  radio.setDataRate(RF24_2MBPS);
+  radio.setDataRate(RF24_250KBPS);
 
   radio.openReadingPipe(1, addresses[RECEIVER_ADDRESS_INDEX]);
   radio.enableAckPayload();
@@ -66,61 +72,38 @@ void setup() {
   radio.setRetries(5,15);
   // the radio listening for data
   radio.startListening();
-  
-  // we love blinking
-  for (int i = 0; i < 3; i++) {
-    digitalWrite(LED1_PIN, LOW);
-    digitalWrite(LED2_PIN, LOW);
-    digitalWrite(LED3_PIN, LOW);
-    delay(500);
-    digitalWrite(LED1_PIN, HIGH);
-    digitalWrite(LED2_PIN, HIGH);
-    digitalWrite(LED3_PIN, HIGH);
-    delay(500);
-  }
 
-  digitalWrite(LED1_PIN, LOW);
-  digitalWrite(LED2_PIN, LOW);
-  digitalWrite(LED3_PIN, LOW);
-  DEBUGSERIAL.println("Setup complete");
 }
 
 bool receiveMsg(Message *msg) {
-   char hello [] = "hello this test length!!";
-   Message ackMsg;
-   convertToBytes(hello, ackMsg.payload, sizeof(hello));
-   ackMsg.payloadLength = sizeof(ackMsg.payload);
-   ackMsg.dataType = SK8_MESSAGE;
+   
 
-   if( radio.available()){
-      digitalWrite(LED1_PIN, HIGH);
+   if(radio.available()){
       radio.read( msg, sizeof(*msg) );             // Get the payload
       parseData(msg);
 
       if (VescUartGetValue(measuredVal)) {
-        digitalWrite(LED2_PIN, HIGH);
         // SerialPrintFocBoxUnity(measuredVal, &DEBUGSERIAL);
+        Message ackMsg;
+        constructAckMsg(&ackMsg);      
+        radio.writeAckPayload(1, &ackMsg, sizeof(ackMsg));
       } else {
-        DEBUGSERIAL.println("Failed to get data!");
+        DEBUG_PRINT_LN("Failed to get data from VESC");
+        radio.writeAckPayload(1, &noData, sizeof(noData));
       }
 
-      Message msg;
-      constructAckMsg(&msg);
-      printBytes(msg.payload, msg.payloadLength, &DEBUGSERIAL);
-      radio.writeAckPayload(1, &msg, sizeof(ackMsg));
-      digitalWrite(LED1_PIN, LOW);
+      
+      //radio.writeAckPayload(1, msg, sizeof(*msg));   
       return true;
-   }
-   return false;
+  }
+
+  return false;
 }
 
 
 void loop() {
   Message msg;
   receiveMsg(&msg);
-  digitalWrite(LED1_PIN, LOW);
-  digitalWrite(LED2_PIN, LOW);
-  digitalWrite(LED3_PIN, LOW);
 }
 
 void constructAckMsg(Message *msg) {
@@ -146,20 +129,20 @@ void constructAckMsg(Message *msg) {
 
 void parseData(Message *msg) {
   char message[64] = "";
-  //DEBUGSERIAL.println("Message received from remote!");
-  uint8_t speed;
+  
   switch (msg->dataType) {
 
     case SK8_MESSAGE: {
       convertToCharArr(msg->payload, message, msg->payloadLength);
-      DEBUGSERIAL.print("message: ");
-      DEBUGSERIAL.println(message);
+      DEBUG_PRINT("message: ");
+      DEBUG_PRINT_LN(message);
       break;
     }
     case SK8_SPEED: {
       speed = getSpeedValue(msg);
-      DEBUGSERIAL.print(" speed: ");
-      DEBUGSERIAL.println(speed);
+      DEBUG_PRINT("speed: ");
+      DEBUG_PRINT_LN(speed);
+
       remote.valXJoy = speed;
       remote.valYJoy = speed;
       remote.valUpperButton = false;
@@ -170,7 +153,7 @@ void parseData(Message *msg) {
       break;
     }
     default: {
-      DEBUGSERIAL.println("Unable to parse message!");
+      DEBUG_PRINT_LN("Unable to parse message!");
       break;
     }
   }
