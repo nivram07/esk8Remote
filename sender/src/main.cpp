@@ -50,13 +50,8 @@ const byte SPEED_PIN = 16; //A2
 // Click on the analog thumbstick
 const byte MODE_PIN = 2; //D2
 
-const byte DEAD_MAN_SWITCH_PIN = 9; //D9
-
 int rawSpeedValue = 0;
 int convertedSpeedValue = 0;
-
-const unsigned short SET_UPPER_LIMIT_SPEED = 1;
-const unsigned short SET_LOWER_LIMIT_SPEED = 0;
 
 int upperLimitSpeed = 1023;
 int lowerLimitSpeed = 0;
@@ -70,6 +65,17 @@ const byte SPEED_MODE = 1;
 const byte BATTERY_MODE = 2;
 const byte SETTINGS_MODE = 3;
 
+
+const double wheelDiametermm = 80.0;
+const double gearRatio = 36/16; // 36T, 16T pulley from diyelectricskateboard;
+
+
+double mph = 0.0;
+
+double battPercent = 0.0;
+const double peakVoltage = 50.4; // based on a 12s4p battery
+const double cutoffVoltage = 37.2;
+
 // message from receiver
 struct bldcMeasure receivedMsg;
 
@@ -78,13 +84,15 @@ static void drawHeart(uint8_t position);
 static void drawCurrentMode();
 static void drawBars();
 void calculateAnalogInputs();
-void sendData();
+boolean sendData();
 
 static void startUpScreen();
+static void drawNoSignal();
 
+void calculateBattPercent();
+static void drawBatteryPercent();
 void changeMode();
-void setLimitSpeed(unsigned short mode);
-
+void calculateMPH();
 
 void setup() {
     /* Select the font to use with menu and all font functions */
@@ -94,60 +102,23 @@ void setup() {
     Serial.begin(115200); 
     analogReference(DEFAULT);
     pinMode(MODE_PIN, INPUT_PULLUP);
-    pinMode(DEAD_MAN_SWITCH_PIN, INPUT_PULLUP);
 
     delayMicroseconds(50);
     attachInterrupt(digitalPinToInterrupt(MODE_PIN), changeMode, FALLING);
     
     // setup radio
     radio.begin();
-    radio.setPALevel(RF24_PA_LOW);
+    radio.setPALevel(RF24_PA_HIGH);
     radio.setDataRate(RF24_250KBPS);
     radio.enableAckPayload();
     radio.setRetries(5,15);
     radio.openWritingPipe(addresses[RECEIVER_ADDRESS_INDEX]);
 
-    ssd1306_clearScreen(); 
-    ssd1306_printFixed(0, 16, "HOLD ACCELERATE", STYLE_BOLD);
-    delay(5000);
-    setLimitSpeed(SET_UPPER_LIMIT_SPEED);
-    
-    ssd1306_clearScreen(); 
-    ssd1306_printFixed(0, 16, "HOLD BRAKE", STYLE_BOLD);
-    delay(5000);
-    setLimitSpeed(SET_LOWER_LIMIT_SPEED);
-
-    ssd1306_clearScreen();   
-    ssd1306_printFixed(0, 16, "DONE CALIBRATING", STYLE_BOLD);
-    delay(1500);
-    DEBUG_PRINT("MIN: ");
-    DEBUG_PRINT(lowerLimitSpeed);
-    DEBUG_PRINT( "MAX: ");
-    DEBUG_PRINT(upperLimitSpeed);
-    DEBUG_PRINT_LN("");
-    delay(1500);
+    delay(500);
 
     previousTime = millis();
     startUpScreen();
     DEBUG_PRINT_LN("Setup done.");
-}
-
-void setLimitSpeed(unsigned short mode) {
-  int current = 0;
-  for (int i = 0; i < 20; i++) {
-    current += analogRead(SPEED_PIN);
-    delay(5);
-  }
-  
-  if (mode == SET_UPPER_LIMIT_SPEED) {
-    upperLimitSpeed = current/20; // just average it
-    DEBUG_PRINT("ACTUAL MAX: ");
-    DEBUG_PRINT_LN(upperLimitSpeed);
-    if (upperLimitSpeed < 700) upperLimitSpeed = 1023; // adjust if too low
-  } else {
-    lowerLimitSpeed = current/20;
-    if (lowerLimitSpeed > 200) lowerLimitSpeed = 0; // adjust if too high
-  }
 }
 
 void changeMode() {
@@ -176,30 +147,32 @@ static void startUpScreen() {
 void loop() {
   
   calculateAnalogInputs();
-  ssd1306_clearScreen();
-  drawBars();
-  drawCurrentMode();
   
-  sendData();
+  if (sendData()) {
+    drawBars();
+    drawCurrentMode();
+    drawBatteryPercent();
+  } else {
+    drawNoSignal();
+  }
    delay(5);
 }
 
-void sendData() {
-  //if (!digitalRead(DEAD_MAN_SWITCH_PIN)) {
-    Message msg = {SK8_SPEED, sizeof(convertedSpeedValue)};
-    setSpeedValue(&msg, convertedSpeedValue);
-    // DEBUG_PRINT("Sending: ");
-    // DEBUG_PRINT_LN(convertedSpeedValue);
-    bool sendSuccess = radio.write( &msg, sizeof(msg));
-    if( sendSuccess ) {
-      if (radio.isAckPayloadAvailable()) {
-        Message msgReceived;
-        radio.read( &msgReceived, sizeof(msgReceived) );             // Get the payload
-        parseData(&msgReceived);
-      }
-    } else {
-      DEBUG_PRINT_LN("Failed.");
+boolean sendData() {
+  Message msg = {SK8_SPEED, sizeof(convertedSpeedValue)};
+  setSpeedValue(&msg, convertedSpeedValue);
+  bool sendSuccess = radio.write( &msg, sizeof(msg));
+  if( sendSuccess ) {
+    if (radio.isAckPayloadAvailable()) {
+      Message msgReceived;
+      radio.read( &msgReceived, sizeof(msgReceived) );             // Get the payload
+      parseData(&msgReceived);
     }
+    return true;
+  }
+    
+  DEBUG_PRINT_LN("Failed to send.");
+  return false;
 }
 
 void calculateAnalogInputs() {
@@ -210,13 +183,25 @@ void calculateAnalogInputs() {
 
 
 static void drawBars() {
+  
   uint8_t barSpeed = convertedSpeedValue/2;
+  if (barSpeed <= 0) barSpeed = 0;
+  else if (barSpeed >= 128) barSpeed = 128;
+  ssd1306_clearScreen();
   ssd1306_drawHLine(0, 8, barSpeed);
 
   drawHeart(barSpeed);
 }
 
+static void drawNoSignal() {
+  
+  ssd1306_clearScreen();
+  ssd1306_printFixed(16, 16, "NO SIGNAL", STYLE_BOLD);
+}
+
 static void drawCurrentMode() {
+ 
+  ssd1306_clearScreen();
   switch(currentMode) {
     case DEFAULT_MODE: {
         ssd1306_printFixed(0, 16, "DEF", STYLE_BOLD);
@@ -251,6 +236,21 @@ static void drawHeart(uint8_t position) {
     sprite.draw();
 }
 
+static void drawBatteryPercent() {
+  ssd1306_clearScreen();
+  char battPercentStr[8];
+  dtostrf(battPercent, 1, 2, battPercentStr);
+  ssd1306_printFixed(32, 16, battPercentStr, STYLE_BOLD);
+}
+
+void calculateMPH(float rpm) {
+  mph = rpm * 60.0 * wheelDiametermm / 1000.0 * PI * 0.000621371 / 10;
+}
+
+
+void calculateBattPercent(float inputVoltage, float peakVoltage, float  cutOffVoltage) {
+  battPercent = (inputVoltage - cutOffVoltage)/(peakVoltage - cutOffVoltage) * 100;
+}
 
 void parseData(Message *msg) {
   char message[64] = "";
@@ -274,6 +274,8 @@ void parseData(Message *msg) {
       //DEBUGSERIAL.println("Readings received.");
       RequiredReadings readings;
       int checkSize = convertToRequiredReadings(msg, &readings);
+      calculateBattPercent(readings.inputVoltage, peakVoltage, cutoffVoltage);
+      calculateMPH(min(readings.rpm1, readings.rpm2));
       //DEBUGSERIAL.print("payload size: "); DEBUG_PRINT_LN(msg->payloadLength);
       //DEBUG_PRINT("last index value: ");
       //DEBUG_PRINT_LN(checkSize);
@@ -282,7 +284,13 @@ void parseData(Message *msg) {
       DEBUG_PRINT("RPM1: ");
       DEBUG_PRINT(readings.rpm1);
       DEBUG_PRINT(" RPM2: ");
-      DEBUG_PRINT_LN(readings.rpm2);
+      DEBUG_PRINT(readings.rpm2);
+      DEBUG_PRINT(" IN_VOLTAGE: ");
+      DEBUG_PRINT(readings.inputVoltage);
+      DEBUG_PRINT(" AMP_HRS: ");
+      DEBUG_PRINT(readings.ampHours);
+      DEBUG_PRINT(" MPH1: ");
+      DEBUG_PRINT_LN(mph);
       //DEBUG_PRINT("Watt Hours Charged: ");
       //DEBUG_PRINT_LN(readings.wattHoursCharged);
       //DEBUG_PRINT("Avg Input Current: ");

@@ -23,7 +23,7 @@ void convertToMessage(Message *target, RequiredReadings *source) {
 
   
   FloatPayload item;
-  item.value = source->ampHoursCharged;
+  item.value = source->ampHours;
   injectToPayload(&currentIndex, target->payload, &item);
   
   item.value = source->rpm1;
@@ -35,7 +35,7 @@ void convertToMessage(Message *target, RequiredReadings *source) {
   item.value = source->wattHoursCharged;
   injectToPayload(&currentIndex, target->payload, &item);
 
-  item.value = source->inputCurrent;
+  item.value = source->inputVoltage;
   injectToPayload(&currentIndex, target->payload, &item);
 
   target->payloadLength = sizeof(target->payload)/sizeof(byte);
@@ -46,11 +46,11 @@ int convertToRequiredReadings(Message *source, RequiredReadings *target) {
   int currentIndex = 0;
   if (source->dataType == SK8_TEL_REQUIRED_READINGS) {
 
-    target->ampHoursCharged = getFloatValue(&currentIndex, source->payload);
+    target->ampHours = getFloatValue(&currentIndex, source->payload);
     target->rpm1 = getFloatValue(&currentIndex, source->payload);
     target->rpm2 = getFloatValue(&currentIndex, source->payload);
     target->wattHoursCharged = getFloatValue(&currentIndex, source->payload);
-    target->inputCurrent = getFloatValue(&currentIndex, source->payload);
+    target->inputVoltage = getFloatValue(&currentIndex, source->payload);
   }
   return currentIndex;
 }

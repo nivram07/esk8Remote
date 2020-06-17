@@ -54,11 +54,11 @@ typedef enum DATA_TYPE {
 
 
 typedef struct RequiredReadings {
-  float ampHoursCharged;
+  float ampHours;
   float rpm1;
   float rpm2;
   float wattHoursCharged;
-  float inputCurrent;
+  float inputVoltage;
 } RequiredReadings;
 
 typedef struct Message {

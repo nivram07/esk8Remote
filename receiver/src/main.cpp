@@ -63,7 +63,7 @@ void setup() {
 
   // setup radio
   radio.begin();
-  radio.setPALevel(RF24_PA_LOW);
+  radio.setPALevel(RF24_PA_HIGH);
   radio.setDataRate(RF24_250KBPS);
 
   radio.openReadingPipe(1, addresses[RECEIVER_ADDRESS_INDEX]);
@@ -108,11 +108,11 @@ void loop() {
 
 void constructAckMsg(Message *msg) {
   RequiredReadings readings;
-  readings.ampHoursCharged = measuredVal.ampHoursCharged;
+  readings.ampHours = measuredVal.ampHours;
   readings.rpm1 = measuredVal.rpm;
   readings.rpm2 = measuredVal.rpm2;
   readings.wattHoursCharged = measuredVal.wattHoursCharged;
-  readings.inputCurrent = measuredVal.avgInputCurrent;
+  readings.inputVoltage = measuredVal.inpVoltage;
   // DEBUGSERIAL.print("Amp Hours Charged: ");
   // DEBUGSERIAL.print(readings.ampHoursCharged);
   // DEBUGSERIAL.print(" RPM1: ");
