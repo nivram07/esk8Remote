@@ -67,7 +67,7 @@ const byte SETTINGS_MODE = 3;
 
 
 const double wheelDiametermm = 80.0;
-const double gearRatio = 36/16; // 36T, 16T pulley from diyelectricskateboard;
+const double gearRatio = 16.0/36.0; // 36T, 16T pulley from diyelectricskateboard;
 
 
 double mph = 0.0;
@@ -80,9 +80,9 @@ const double cutoffVoltage = 37.2;
 struct bldcMeasure receivedMsg;
 
 void parseData(Message *msg);
-static void drawHeart(uint8_t position);
+static void drawSprite(uint8_t x, uint8_t y, uint8_t width, const uint8_t *data);
 static void drawCurrentMode();
-static void drawBars();
+static void drawTriggerInput();
 void calculateAnalogInputs();
 boolean sendData();
 
@@ -134,7 +134,6 @@ void changeMode() {
 
 static void startUpScreen() {
   for (int i = 0; i < 3; i++) {
-    
     ssd1306_clearScreen();
     ssd1306_drawBitmap(0, 0, 128, 32, logo);
     ssd1306_normalMode();
@@ -144,20 +143,26 @@ static void startUpScreen() {
   ssd1306_normalMode();
 }
 
+/**
+ * 
+ * MAIN LOOP
+ * 
+ * 
+ **/
 void loop() {
   
   calculateAnalogInputs();
-  
-  if (sendData()) {
-    drawBars();
-    drawCurrentMode();
-    drawBatteryPercent();
-  } else {
-    drawNoSignal();
-  }
-   delay(5);
-}
+  ssd1306_clearScreen();
+  drawTriggerInput();
 
+  if (!sendData()) {
+    drawNoSignal();
+    drawSprite(120, 0, spriteWidth, noSignal);
+  } else {
+    drawCurrentMode();
+  }
+   delay(1);
+}
 boolean sendData() {
   Message msg = {SK8_SPEED, sizeof(convertedSpeedValue)};
   setSpeedValue(&msg, convertedSpeedValue);
@@ -182,54 +187,47 @@ void calculateAnalogInputs() {
 }
 
 
-static void drawBars() {
+static void drawTriggerInput() {
   
   uint8_t barSpeed = convertedSpeedValue/2;
   if (barSpeed <= 0) barSpeed = 0;
   else if (barSpeed >= 128) barSpeed = 128;
-  ssd1306_clearScreen();
   ssd1306_drawHLine(0, 8, barSpeed);
 
-  drawHeart(barSpeed);
+  if (barSpeed >= 120) {
+    drawSprite(120, 0, spriteWidth, marker);
+  } else {
+    drawSprite(barSpeed, 0, spriteWidth, marker);
+  }
 }
 
 static void drawNoSignal() {
-  
-  ssd1306_clearScreen();
   ssd1306_printFixed(16, 16, "NO SIGNAL", STYLE_BOLD);
 }
 
 static void drawCurrentMode() {
- 
-  ssd1306_clearScreen();
   switch(currentMode) {
-    case DEFAULT_MODE: {
-        ssd1306_printFixed(0, 16, "DEF", STYLE_BOLD);
-        break;
-    }
-    case SPEED_MODE: {
-      ssd1306_printFixed(0, 16, "SPD", STYLE_BOLD);
-        break;
-    }
+    case DEFAULT_MODE:
     case BATTERY_MODE: {
       ssd1306_printFixed(0, 16, "BAT", STYLE_BOLD);
-        break;
+      drawBatteryPercent();
+      break;
     }
+    case SPEED_MODE:{
+      ssd1306_printFixed(0, 16, "SPD", STYLE_BOLD);
+      break;
+    }
+    
     case SETTINGS_MODE: {
       ssd1306_printFixed(0, 16, "SET", STYLE_BOLD);
-        break;
+      break;
     }
   }
 }
 
-static void drawHeart(uint8_t position) {
+static void drawSprite(uint8_t x, uint8_t y, uint8_t width, const uint8_t *data) {
     /* Declare variable that represents our sprite */
-    SPRITE sprite;
-    if (position >= 120) {
-      sprite = ssd1306_createSprite( 120, 0, spriteWidth, fck );
-    } else {
-      sprite = ssd1306_createSprite( position, 0, spriteWidth, fck );
-    }
+    SPRITE sprite = ssd1306_createSprite(x, y, width, data);
     /* Erase sprite on old place. The library knows old position of the sprite. */
     sprite.eraseTrace();
     /* Draw sprite on new place */
@@ -237,14 +235,15 @@ static void drawHeart(uint8_t position) {
 }
 
 static void drawBatteryPercent() {
-  ssd1306_clearScreen();
   char battPercentStr[8];
   dtostrf(battPercent, 1, 2, battPercentStr);
-  ssd1306_printFixed(32, 16, battPercentStr, STYLE_BOLD);
-}
+  strcat(battPercentStr, "%");
+  ssd1306_printFixedN(32, 16, battPercentStr, STYLE_BOLD, 1);
+  }
 
 void calculateMPH(float rpm) {
-  mph = rpm * 60.0 * wheelDiametermm / 1000.0 * PI * 0.000621371 / 10;
+  // revisit this. Not accurate with the FOXBOX UI real time data 
+  mph = rpm * gearRatio * 60.0 * wheelDiametermm / 1000.0 * PI * 0.000621371 / 10.0; // division by 10 is from the FOXBOX UI logic.
 }
 
 
@@ -271,16 +270,10 @@ void parseData(Message *msg) {
       break;
     }
     case SK8_TEL_REQUIRED_READINGS: {
-      //DEBUGSERIAL.println("Readings received.");
       RequiredReadings readings;
       int checkSize = convertToRequiredReadings(msg, &readings);
       calculateBattPercent(readings.inputVoltage, peakVoltage, cutoffVoltage);
       calculateMPH(min(readings.rpm1, readings.rpm2));
-      //DEBUGSERIAL.print("payload size: "); DEBUG_PRINT_LN(msg->payloadLength);
-      //DEBUG_PRINT("last index value: ");
-      //DEBUG_PRINT_LN(checkSize);
-      //DEBUG_PRINT("Amp Hours Charged: ");
-      //DEBUG_PRINT_LN(readings.ampHoursCharged);
       DEBUG_PRINT("RPM1: ");
       DEBUG_PRINT(readings.rpm1);
       DEBUG_PRINT(" RPM2: ");
@@ -291,10 +284,6 @@ void parseData(Message *msg) {
       DEBUG_PRINT(readings.ampHours);
       DEBUG_PRINT(" MPH1: ");
       DEBUG_PRINT_LN(mph);
-      //DEBUG_PRINT("Watt Hours Charged: ");
-      //DEBUG_PRINT_LN(readings.wattHoursCharged);
-      //DEBUG_PRINT("Avg Input Current: ");
-      //DEBUG_PRINT_LN(readings.inputCurrent);
       break;
     }
     default: {
